@@ -1,0 +1,27 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python src/create_features_w_params.py
+    deps:
+    - path: data/data.pickle
+      hash: md5
+      md5: d90b5900b302365042d58730295d8e3f
+      size: 1193662
+      isexec: true
+    params:
+      params.yaml:
+        features.data_path: data/data.pickle
+        features.test_split_perc: 0.2
+    outs:
+    - path: data/pipeline.pkl
+      hash: md5
+      md5: bc04757444da2c97b78d18d5664bdf52
+      size: 841
+    - path: data/processed_test_data.csv
+      hash: md5
+      md5: 14c0d5723d43f6a9bfdcb16ee4e2a684
+      size: 592995
+    - path: data/processed_train_data.csv
+      hash: md5
+      md5: 4242c9ac2683ee6a120fd9403d421016
+      size: 2328278

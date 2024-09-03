@@ -1,0 +1,12 @@
+stages:
+  prepare:
+    cmd: python src/create_features_w_params.py
+    deps:
+      - data/data.pickle
+    outs:
+      - data/pipeline.pkl
+      - data/processed_train_data.csv
+      - data/processed_test_data.csv
+    params: 
+      - features.test_split_perc
+      - features.data_path
