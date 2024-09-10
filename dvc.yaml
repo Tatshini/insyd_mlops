@@ -2,7 +2,7 @@ stages:
   prepare:
     cmd: python src/create_features_w_params.py
     deps:
-      - data/data.pickle
+      - data/data.csv
     outs:
       - data/pipeline.pkl
       - data/processed_train_data.csv
