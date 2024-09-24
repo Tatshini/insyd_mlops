@@ -1,0 +1,5 @@
+outs:
+- md5: c2870276abb4993945565b570feb994e
+  size: 201813
+  hash: md5
+  path: test_kaggle.pickle
