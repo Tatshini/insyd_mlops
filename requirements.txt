@@ -5,3 +5,7 @@ scikit-learn==1.5.1
 hyperopt==0.2.7
 metaflow==2.12.20
 pylint==3.2.7
+fastapi==0.115.0
+uvicorn==0.30.6
+pydantic==2.8.2
+requests==2.32.3

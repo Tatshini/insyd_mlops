@@ -12,6 +12,7 @@ from sklearn.metrics import r2_score, make_scorer
 from sklearn.model_selection import cross_val_score
 import mlflow
 
+
 class PriceTrainFlow(FlowSpec):
     cv = Parameter('cv', default=5, type=int, required=True)
     random_seed = Parameter('random_state', default=42, type=int, required=True)
@@ -23,20 +24,22 @@ class PriceTrainFlow(FlowSpec):
         infile_train = open(file_path_train, 'rb')
         train = pickle.load(infile_train)
         infile_train.close()
-        
+
         train_rf = self.reformat(train)
-        
+        self.test_config = {}
         # Preparing train sets
         train = pd.DataFrame(train_rf)
         self.y_train = train['price']
         self.x_train = train.drop('price', axis=1)
         self.columns_orig = self.x_train.columns
+        self.test_config["columns_orig"] = self.x_train.columns
         # Handling missing columns
         self.x_train = pd.get_dummies(self.x_train, columns=["loc_string", "loc", "type", "subtype", "selltype"])
         # self.columns_with_dummies = self.x_train.columns
         # Filling missing values
         self.fill_missing_values()
-        
+        self.test_config["all_colummns"] = set(self.x_train.columns)
+
         # Standardizing the data
         self.preprocess_data()
 
@@ -75,15 +78,18 @@ class PriceTrainFlow(FlowSpec):
         self.x_train["bath"] = self.x_train["bath"].fillna(1)
         self.x_train["bed"] = self.x_train["bed"].fillna(1)
         self.x_train["area"] = self.x_train["area"].fillna(int(self.x_train["area"].mean()))
+        self.test_config["area"] = int(self.x_train["area"].mean())
 
     def preprocess_data(self):
         """Standardize numeric columns and process categorical/text features."""
         numeric_columns = self.x_train.select_dtypes(exclude=['object']).columns
+        self.test_config["numeric_columns"] = numeric_columns
 
         scaler = StandardScaler()
         x_train_numeric_scaled = self.x_train.copy()
         x_train_numeric_scaled[numeric_columns] = scaler.fit_transform(self.x_train[numeric_columns])
         self.scaler = scaler
+        self.test_config["scaler"] = self.scaler
 
         preprocessor = ColumnTransformer(
             transformers=[
@@ -110,7 +116,14 @@ class PriceTrainFlow(FlowSpec):
 
         mlflow.set_tracking_uri('https://mlflow-539716308541.us-west2.run.app')
         mlflow.set_experiment('price-prediction-metaflow-local-experiment')
-        
+        param_grid = {
+            'n_estimators': [300, 400],
+            'learning_rate': [0.08, 0.09, 0.12],
+            'max_depth': [3, 5],
+            'min_samples_split': [5, 10],
+            'subsample': [0.6],
+            'random_state': [42]
+        }
         for est in param_grid["n_estimators"]:
             for lr in param_grid["learning_rate"]:
                 for md in param_grid["max_depth"]:
@@ -140,6 +153,9 @@ class PriceTrainFlow(FlowSpec):
                                     self.best_model = gb_model
         self.best_model.fit(self.X_train, self.y_train)
         mlflow.sklearn.log_model(self.best_model, artifact_path = 'metaflow_train', registered_model_name="metaflow-price-model")
+        with open('test_config.pkl', 'wb') as f:
+            pickle.dump(self.test_config, f)
+        mlflow.log_artifact("test_config.pkl", artifact_path='metaflow_train')
         mlflow.end_run()
 
         self.next(self.end)

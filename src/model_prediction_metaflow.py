@@ -12,6 +12,7 @@ class PricePredictFlow(FlowSpec):
         # Load the latest trained model from the 'PriceTrainFlow'
         self.run = Flow('PriceTrainFlow').latest_run
         self.model = self.run['end'].task.data.best_model
+        self.test_config = self.run['end'].task.data.test_config
         print("Model loaded successfully")
         # Load the test data
         self.X_test = self.load_test_data()
@@ -50,9 +51,9 @@ class PricePredictFlow(FlowSpec):
         x_test = pd.DataFrame(test_rf).drop('id', axis=1)
         # Type hint for Pylint
         x_test: pd.DataFrame  # Explicitly declaring that x_test is a DataFrame
-        x_test = x_test[self.run['start'].task.data.columns_orig]
+        x_test = x_test[self.test_config["columns_orig"]]
         x_test = pd.get_dummies(x_test, columns=["loc_string", "loc", "type", "subtype", "selltype"])
-        all_columns = set(self.run['start'].task.data.x_train.columns)
+        all_columns = set(self.test_config["all_colummns"])
         missing_columns = all_columns - set(x_test.columns)
         for col in missing_columns:
             x_test[col] = 0
@@ -69,13 +70,13 @@ class PricePredictFlow(FlowSpec):
         """Fill missing values in the training and testing datasets."""
         self.x_test["bath"] = self.x_test["bath"].fillna(1)
         self.x_test["bed"] = self.x_test["bed"].fillna(1)
-        self.x_test["area"] = self.x_test["area"].fillna(int(self.run['start'].task.data.x_train["area"].mean()))
+        self.x_test["area"] = self.x_test["area"].fillna(self.test_config['area'])
 
     def preprocess_data(self):
         # Concatenate numeric and categorical columns side by side
-        numeric_columns = self.run['start'].task.data.x_train.select_dtypes(exclude=['object']).columns
+        numeric_columns = self.test_config['numeric_columns']
         x_test_numeric_scaled = self.x_test.copy()
-        x_test_numeric_scaled[numeric_columns] = self.run['start'].task.data.scaler.transform(self.x_test[numeric_columns])
+        x_test_numeric_scaled[numeric_columns] = self.test_config['scaler'].transform(self.x_test[numeric_columns])
         self.X_test = pd.concat([x_test_numeric_scaled[numeric_columns], self.x_test.select_dtypes(include=['object'])], axis=1)
         # self.X_test = pd.DataFrame(np.hstack((x_test_numeric_scaled[numeric_columns], self.x_test.select_dtypes(include=['object']))))
         return self.X_test

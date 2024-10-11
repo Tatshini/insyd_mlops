@@ -14,7 +14,7 @@ import mlflow
 from google.cloud import storage
 
 
-@conda_base(libraries={'numpy':'1.23.5', 'scikit-learn':'1.2.2', 'pandas':'2.2.2', 'mlflow':'2.15.1'}, python='3.9.16')
+@conda_base(libraries={'numpy':'1.26.4', 'scikit-learn':'1.5.1', 'pandas':'2.2.2', 'mlflow':'2.15.1'}, python='3.12.4')
 class PriceTrainFlow(FlowSpec):
     cv = Parameter('cv', default=5, type=int, required=True)
     random_seed = Parameter('random_state', default=42, type=int, required=True)
@@ -36,18 +36,20 @@ class PriceTrainFlow(FlowSpec):
 
         print("Data loaded successfully")
         train_rf = self.reformat(train)
+        self.test_config = {}
         
         # Preparing train sets
         train = pd.DataFrame(train_rf)
         self.y_train = train['price']
         self.x_train = train.drop('price', axis=1)
         self.columns_orig = self.x_train.columns
+        self.test_config["columns_orig"] = self.x_train.columns
         # Handling missing columns
         self.x_train = pd.get_dummies(self.x_train, columns=["loc_string", "loc", "type", "subtype", "selltype"])
         # self.columns_with_dummies = self.x_train.columns
         # Filling missing values
         self.fill_missing_values()
-        
+        self.test_config["all_colummns"] = set(self.x_train.columns)
         # Standardizing the data
         self.preprocess_data()
 
@@ -86,15 +88,17 @@ class PriceTrainFlow(FlowSpec):
         self.x_train["bath"] = self.x_train["bath"].fillna(1)
         self.x_train["bed"] = self.x_train["bed"].fillna(1)
         self.x_train["area"] = self.x_train["area"].fillna(int(self.x_train["area"].mean()))
+        self.test_config["area"] = int(self.x_train["area"].mean())
 
     def preprocess_data(self):
         """Standardize numeric columns and process categorical/text features."""
         numeric_columns = self.x_train.select_dtypes(exclude=['object']).columns
-
+        self.test_config["numeric_columns"] = numeric_columns
         scaler = StandardScaler()
         x_train_numeric_scaled = self.x_train.copy()
         x_train_numeric_scaled[numeric_columns] = scaler.fit_transform(self.x_train[numeric_columns])
         self.scaler = scaler
+        self.test_config["scaler"] = self.scaler
 
         preprocessor = ColumnTransformer(
             transformers=[
@@ -157,7 +161,10 @@ class PriceTrainFlow(FlowSpec):
                                     self.best_r2 = mean_r2
                                     self.best_model = gb_model
         self.best_model.fit(self.X_train, self.y_train)
-        mlflow.sklearn.log_model(self.best_model, artifact_path = 'metaflow_train', registered_model_name="metaflow-price-model")
+        mlflow.sklearn.log_model(self.best_model, artifact_path = 'metaflow_train', registered_model_name="metaflow-price-model-gcp")
+        with open('test_config.pkl', 'wb') as f:
+            pickle.dump(self.test_config, f)
+        mlflow.log_artifact("test_config.pkl", artifact_path='metaflow_train')
         mlflow.end_run()
 
         self.next(self.end)
